@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <!--  <script src="aws-cognito-sdk.min.js"></script>
+  <script src="amazon-cognito-identity.min.js"></script> -->
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.490.0.min.js"></script>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+
+
+  <!-- <script src="./app.js"></script> -->
+  <meta charset="UTF-8">
+  <title>Rekognition</title>
+</head>
+
+<body class="container-fluid">
+  <H1>Text Detection Example</H1>
+  <input type="file" name="fileToUpload" id="fileToUpload" accept="image/*">
+  <div class="spinner-mask w-100 h-100 text-center d-none" > 
+          <div>Analizando Imágen, por favor espere</div>
+          <div class="spinner-border m-5 text-align-center" role="status" >
+            <span class="sr-only">Loading...</span>
+          </div>
+      </div>
+  <div class="results">
+      
+  </div>
+</body>
+<script>
+
+  document.getElementById("fileToUpload").addEventListener("change", function (event) {
+    ProcessImage();
+  }, false);
+  
+  function DetectText(imageData) {
+    $('.results').empty();
+    $('.spinner-mask').removeClass('d-none').addClass('d-block');
+    AWS.region = "us-east-1";
+    var rekognition = new AWS.Rekognition();
+    var params = {
+      Image: {
+        Bytes: imageData
+      }
+    };
+
+    
+    rekognition.detectText(params, function (err, data) {
+      $('.spinner-mask').removeClass('d-block').addClass('d-none');
+      if(err){
+        console.error(err,err.stack);
+      }else{
+        data.TextDetections.forEach(function(item, index, array){
+          var responseElement = $('<div id="result-'+index+'">'+ item.DetectedText +'</div>');
+          var ulElement = $('<ul></ul>');
+          ulElement.append('<li><b>Confidence</b>: '+ item.Confidence +'</li>');
+          ulElement.append('<li><b>Type</b>: '+ item.Type +'</li>');
+          var boundingLabel = $('<li class="item-bounding"> <b>Boundings </b></li>');
+          ulElement.append(boundingLabel);
+          var ulBounding = $('<ul></ul>');
+          boundingLabel.append(ulBounding);
+          ulBounding.append('<li>Height: '+ item.Geometry.BoundingBox.Height +'</li>');
+          ulBounding.append('<li>Width: '+ item.Geometry.BoundingBox.Width +'</li>');
+          ulBounding.append('<li>Left: '+ item.Geometry.BoundingBox.Left +'</li>');
+          ulBounding.append('<li>Top: '+ item.Geometry.BoundingBox.Top +'</li>');
+
+          ulElement.append(ulBounding);
+          responseElement.append(ulElement);
+          $('.results').append(responseElement);
+          console.log(item);
+        });
+        // console.log(data);  
+        
+      }
+      
+      // if (err) console.log(err, err.stack); // an error occurred
+      // else {
+      //  var table = "<table><tr><th>Low</th><th>High</th></tr>";
+      //   // show each face and build out estimated age table
+      //   for (var i = 0; i < data.FaceDetails.length; i++) {
+      //     table += '<tr><td>' + data.FaceDetails[i].AgeRange.Low +
+      //       '</td><td>' + data.FaceDetails[i].AgeRange.High + '</td></tr>';
+      //   }
+      //   table += "</table>";
+      //   document.getElementById("opResult").innerHTML = table;
+      // }
+    });
+  }
+  //Loads selected image and unencodes image bytes for Rekognition DetectText API
+  function ProcessImage() {
+    AnonLog();
+    var control = document.getElementById("fileToUpload");
+    var file = control.files[0];
+
+    // Load base64 encoded image 
+    var reader = new FileReader();
+    reader.onload = (function (theFile) {
+      return function (e) {
+        var img = document.createElement('img');
+        var image = null;
+        img.src = e.target.result;
+        var jpg = true;
+        try {
+          image = atob(e.target.result.split("data:image/jpeg;base64,")[1]);
+
+        } catch (e) {
+          jpg = false;
+        }
+        if (jpg == false) {
+          try {
+            image = atob(e.target.result.split("data:image/png;base64,")[1]);
+          } catch (e) {
+            alert("Not an image file Rekognition can process");
+            return;
+          }
+        }
+        //unencode image bytes for Rekognition DetectFaces API 
+        var length = image.length;
+        imageBytes = new ArrayBuffer(length);
+        var ua = new Uint8Array(imageBytes);
+        for (var i = 0; i < length; i++) {
+          ua[i] = image.charCodeAt(i);
+        }
+        //Call Rekognition  
+        DetectText(imageBytes);
+      };
+    })(file);
+    reader.readAsDataURL(file);
+  }
+
+  //Provides anonymous log on to AWS services
+  function AnonLog() {
+    AWS.config.region = 'us-east-1'; // Region
+    AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+      IdentityPoolId: 'us-east-1:81f88653-3fd6-41b6-8cc1-eb48f8482847',
+    });
+    // Make the call to obtain credentials
+    AWS.config.credentials.get(function () {
+      // Credentials will be available when this function is called.
+      var accessKeyId = AWS.config.credentials.accessKeyId;
+      var secretAccessKey = AWS.config.credentials.secretAccessKey;
+      var sessionToken = AWS.config.credentials.sessionToken;
+    });
+  }
+</script>
+ <script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+</html>
